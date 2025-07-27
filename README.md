@@ -1,6 +1,6 @@
 # Korad KD3300 series pylabdevs interface library
 
-This is a `pylabdevs` implementation for the KD3300 power supply. It supports controlling the device via RS232, USB, and Ethernet.
+This is a [`pylabdevs`](https://github.com/tspspi/pylabdevs/) implementation for the KD3300 power supply. It supports controlling the device via RS232, USB, and Ethernet.
 
 ![](https://raw.githubusercontent.com/tspspi/pykd3300/refs/heads/master/doc/kd3305p.jpg)
 
