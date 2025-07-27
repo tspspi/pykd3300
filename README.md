@@ -2,6 +2,8 @@
 
 This is a `pylabdevs` implementation for the KD3300 power supply. It supports controlling the device via RS232, USB, and Ethernet.
 
+![](https://raw.githubusercontent.com/tspspi/pykd3300/refs/heads/master/doc/kd3305p.jpg)
+
 ## Features
 
 - Control voltage and current setpoints
