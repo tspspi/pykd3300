@@ -9,18 +9,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pykd3300-tspspi"
 version = "0.0.1"
-description = "Korad KD3300 interface library (pylabdevs)"
+description = "Korad KD3300 interface library (pylabdevs, unofficial)"
 requires-python = ">= 3.11"
 authors = [
     {name = "Thomas Spielauer", email = "pypipackages01@tspi.at"},
 ]
 readme = "README.md"
 classifiers = [
-	"Programming Language :: Python :: 3"
-    ]
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: BSD License"
+]
 dependencies = [
-	"pylabdevs-tspspi >= 0.0.16",
-	"pyserial >= 3.5"
+    "pylabdevs-tspspi >= 0.0.16",
+    "pyserial >= 3.5"
 ]
 
 [metadata]

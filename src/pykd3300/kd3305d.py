@@ -1,6 +1,7 @@
 import serial
 import atexit
 import math
+import socket
 
 from time import sleep
 from labdevices import powersupply
@@ -63,7 +64,8 @@ class KD3305P(powersupply.PowerSupply):
             if self._port is not None:
                 return True
         else:
-            raise NotImplementedError("UDP mode not implemented")
+            if self._socket is not None:
+                return True
 
         return False
 
@@ -92,7 +94,18 @@ class KD3305P(powersupply.PowerSupply):
 
             self._usesContext = True
         else:
-            raise NotImplementedError("UDP is currently not implemented")
+            if self._socket is None:
+                # For debugging we set REUSEADDR and REUSEPORT to avoid being locked out during
+                # application start when not closing the socket propery
+                self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self._socket.settimeout(1)
+                self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                except AttributeError:
+                    pass
+                # Bind to all IPs and our port that we send also requests on
+                self._socket.bind(('', self._port))
 
         return self
 
@@ -108,7 +121,9 @@ class KD3305P(powersupply.PowerSupply):
                 self._port.close()
                 self._port = None
         else:
-            raise NotImplementedError("UDP is currently not implemented")
+            if self._socket is not None:
+                self._socket.close()
+                self._socket = None
 
     def _connect(self):
         if self._ip is None:
@@ -123,7 +138,18 @@ class KD3305P(powersupply.PowerSupply):
                 )
                 self.__initialRequests()
         else:
-            raise NotImplementedError("UDP is currently not implemented")
+            if self._socket is None:
+                # For debugging we set REUSEADDR and REUSEPORT to avoid being locked out during
+                # application start when not closing the socket propery
+                self._socket = socket.socket(socket.AF_INET, socket.SOCK_DRAM)
+                self._socket.settimeout(1)
+                self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                except AttributeError:
+                    pass
+                # Bind to all IPs and our port that we send also requests on
+                self._socket.bind(('', self._port))
 
         return True
 
@@ -132,7 +158,8 @@ class KD3305P(powersupply.PowerSupply):
             if self._port is not None:
                 self.__close()
         else:
-            raise NotImplementedError("UDP is currently not implemented")
+            if self._socket is not None:
+                self.__close()
 
     # Utility functions
 
@@ -144,7 +171,10 @@ class KD3305P(powersupply.PowerSupply):
             sleep(self._serialCommandDelay)
             self._port.write(f"{cmd}\n".encode('ascii'))
         else:
-            raise NotImplementedError("UDP is currently not implemented")
+            if self._socket is None:
+                raise IOError("Socket is not connected")
+
+            self._socket.sendto(f"{cmd}\n".encode('ascii'), (self._ip, self._port))
 
     def _sendCommandReply(self, cmd, replyLen = None, binary = False):
         retries = self._timeoutRetry
@@ -188,7 +218,62 @@ class KD3305P(powersupply.PowerSupply):
             else:
                 reply = res
         else:
-            raise NotImplementedError("UDP is currently not implemented")
+            if self._socket is None:
+                raise IOError("Socket is not connected")
+
+            self._socket.sendto(f"{cmd}\n".encode('ascii'), (self._ip, self._port))
+
+            res = []
+            while True:
+                try:
+                    data, _ = self._socket.recvfrom(4096)
+                    if not binary:
+                        c = data.decode('ascii')
+                    else:
+                        c = data
+
+                    if len(c) <= 0:
+                        if (replyLen is not None) and (replyLen < 0):
+                            break
+
+                        if self._debug:
+                            print(f"PSU Timeout, received {res} until now")
+                        if (retries is not None):
+                            if retries > 0:
+                                retries = retries - 1
+                                continue
+                            else:
+                                raise IOError("UDP socket timeout")
+                    if len(c) == 1:
+                        if (not binary and (ord(c) == 0 or ord(c) == 10)) or (binary and c == b'\x00'):
+                            break
+                    else:
+                        if (not binary and (ord(c[-1]) == 0 or ord(c[-1]) == 10)) or (binary and c[-1] == b'\x00'):
+                            if len(c) > 1:
+                                res.append(c[:-1])
+                            break
+
+                    if isinstance(c, (bytes, bytearray)):
+                        for b in c:
+                            res.append(bytes([b,]))
+                    else:
+                        res.append(c)
+
+                    if replyLen is not None:
+                        if len(res) == replyLen:
+                            break
+                except Exception as e:
+                    if (retries is not None) and retries > 0:
+                        retries = retries - 1
+                        continue
+                    else:
+                        raise IOError(f"UDP socket error: {e}")
+
+        if not binary:
+            reply = "".join(res)
+        else:
+            reply = res
+
 
         if self._debug:
             print(f"PSU< {reply}")
@@ -227,11 +312,11 @@ class KD3305P(powersupply.PowerSupply):
         }
 
     def _get_status(self):
+        retries = self._readbackRetry
+
         repl = self._sendCommandReply("STATUS?", replyLen = 2, binary = True)
         if len(repl) == 2:
             repl = int.from_bytes(repl[0], "little")
-
-            print(repl)
 
             # Interpret ...
             res = {
@@ -251,8 +336,8 @@ class KD3305P(powersupply.PowerSupply):
                 res['enabled'][1] = True
 
             return res
-        else:
-            raise IOError("Device fails to respond")
+        
+        raise IOError("Device fails to respond")
 
     def _setChannelEnable(self, enable, channel):
         if channel not in [1, 2]:
@@ -370,10 +455,46 @@ class KD3305P(powersupply.PowerSupply):
         else:
             return powersupply.PowerSupplyLimit.CURRENT
 
+    # Non standard functions
+
     def _lock(self):
         self._sendCommand("LOCK1")
 
     def _unlock(self):
         self._sendCommand("LOCK0")
 
+    def get_network(self):
+       ip = self._sendCommandReply(":SYST:IPAD?") 
+       mask = self._sendCommandReply(":SYST:SMASK?")
+       gw = self._sendCommandReply(":SYST:GATE?")
+       dhcp = self._sendCommandReply(":SYST:DHCP?")
+       mac = self._sendCommandReply(":SYST:MAC?")
+       port = self._sendCommandReply(":SYST:PORT?")
 
+       return (ip, port, mask, gw, dhcp, mac)
+
+    def set_network(
+        self,
+        ip = None,
+        port = None,
+        mask = None,
+        gateway = None,
+        dhcp = None
+    ):
+        if ip is not None:
+            self._sendCommand(f":SYST:IPAD {ip}")
+        if port is not None:
+            self._sendCommand(f":SYST:PORT {port}")
+        if mask is not None:
+            self._sendCommand(f":SYST:SMASK {mask}")
+        if gateway is not None:
+            self._sendCommand(f":SYST:GATE {gateway}")
+        if dhcp is not None:
+            if dhcp:
+                self._sendCommand(f":SYST:DHCP 1")
+            else:
+                self._sendCommand(f":SYST:DHCP 0")
+
+        ## ToDo: Add readback and check if everything is set correctly 
+
+        return True

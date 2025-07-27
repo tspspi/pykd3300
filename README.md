@@ -1,19 +1,30 @@
 # Korad KD3300 series pylabdevs interface library
 
-This is a ```pylabdevs``` implementation for the KD3300 power
-supply. It supports controlling the device via RS232, USB and
-Ethernet.
+This is a `pylabdevs` implementation for the KD3300 power supply. It supports controlling the device via RS232, USB, and Ethernet.
+
+## Features
+
+- Control voltage and current setpoints
+- Enable/disable output channels
+- Query measured voltage and current
+- Support for serial, USB, and UDP (Ethernet) communication
+- Network configuration (for supported models)
+- Lock/unlock front panel (device-specific)
 
 ## Installation
 
-```
+This package can be installed from PyPi via
+
+```sh
 pip install pykd3300-tspspi
 ```
 
 ## Usage
 
-### Conencting via UDP
+Will be updated soon. See the examples in the ```examples``` folder
 
-### Conencting via serial or USB
+## Documentation
+
+Further documentation is available in the `doc` directory.
 
 
